@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D-Chart Summary Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+  :root{
+    --bg:#0d1117; --surface:#161b22; --border:#21262d; --border-strong:#30363d;
+    --text:#e6edf3; --text-muted:#7d8590; --accent:#58a6ff; --accent-2:#3fb950;
+    --accent-3:#f78166; --accent-warn:#d29922; --header-bg:#1c2128;
+    --row-hover:#1f2937; --total-bg:#0d2137; --total-text:#79c0ff;
+  }
+
+  body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+
+  /* ── HEADER ── */
+  .app-header{background:var(--surface);border-bottom:1px solid var(--border-strong);padding:14px 28px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:200;flex-wrap:wrap;}
+  .app-title{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;letter-spacing:.06em;white-space:nowrap;}
+  .app-title span{color:var(--accent);}
+  .header-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:1;}
+  .meta-badge{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:3px 9px;border-radius:5px;background:#1f2937;color:var(--text-muted);border:1px solid var(--border-strong);white-space:nowrap;}
+  .meta-badge.has-data{color:var(--accent);background:#1f6feb18;border-color:#1f6feb44;}
+  .meta-badge.month-badge{color:var(--accent-2);background:#1a2d1a;border-color:#2a4a2a;}
+  .header-actions{display:flex;gap:8px;align-items:center;margin-left:auto;}
+
+  .upload-btn{position:relative;padding:7px 14px;border-radius:7px;border:1px solid var(--border-strong);background:var(--header-bg);color:var(--text);cursor:pointer;font-size:12px;font-weight:600;font-family:'IBM Plex Sans',sans-serif;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:6px;}
+  .upload-btn:hover{border-color:var(--accent);color:var(--accent);background:#1a2332;}
+  .upload-btn input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+  .upload-btn.processing{opacity:.6;pointer-events:none;}
+
+  .icon-btn{padding:7px 14px;border-radius:7px;border:1px solid var(--border-strong);background:var(--header-bg);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600;font-family:'IBM Plex Sans',sans-serif;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:6px;}
+  .icon-btn:hover{border-color:var(--accent-warn);color:var(--accent-warn);}
+
+  .export-btn{padding:7px 14px;border-radius:7px;border:none;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:600;background:var(--accent);color:#0d1117;transition:opacity .15s;white-space:nowrap;}
+  .export-btn:hover{opacity:.85;}
+  .export-btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* ── DRAG OVERLAY ── */
+  .drag-overlay{display:none;position:fixed;inset:0;z-index:1999;background:#0d111799;backdrop-filter:blur(2px);align-items:center;justify-content:center;}
+  .drag-overlay.active{display:flex;}
+  .drag-box{border:2px dashed var(--accent);border-radius:16px;padding:60px 80px;text-align:center;background:#161b22ee;}
+  .drag-box-icon{font-size:48px;margin-bottom:16px;}
+  .drag-box-title{font-size:20px;font-weight:600;color:var(--accent);}
+  .drag-box-sub{font-size:14px;color:var(--text-muted);margin-top:8px;}
+
+  /* ── TOAST ── */
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2999;pointer-events:none;transition:opacity .3s;opacity:0;}
+  #toast.show{opacity:1;}
+  .toast-inner{padding:10px 18px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap;border-left:3px solid var(--accent);background:#1a2332;color:var(--accent);box-shadow:0 4px 20px #00000066;}
+  .toast-inner.error{border-color:var(--accent-3);background:#2d1a1a;color:var(--accent-3);}
+  .toast-inner.success{border-color:var(--accent-2);background:#1a2d1a;color:var(--accent-2);}
+  .toast-inner.warn{border-color:var(--accent-warn);background:#2d2500;color:var(--accent-warn);}
+
+  /* ── SLIDE PANEL BACKDROP ── */
+  .panel-backdrop{display:none;position:fixed;inset:0;z-index:399;background:#0d111766;}
+  .panel-backdrop.open{display:block;}
+
+  /* ── SLIDE PANEL ── */
+  .slide-panel{
+    position:fixed;top:0;right:0;height:100vh;width:480px;max-width:95vw;
+    background:var(--surface);border-left:1px solid var(--border-strong);
+    z-index:400;display:flex;flex-direction:column;
+    transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);
+    box-shadow:-8px 0 40px #00000044;
+  }
+  .slide-panel.open{transform:translateX(0);}
+
+  .panel-header{padding:18px 20px 14px;border-bottom:1px solid var(--border-strong);display:flex;align-items:flex-start;gap:12px;flex-shrink:0;}
+  .panel-header-text{flex:1;}
+  .panel-title{font-size:14px;font-weight:600;font-family:'IBM Plex Mono',monospace;color:var(--text);letter-spacing:.04em;}
+  .panel-sub{font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.5;}
+  .panel-close{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:2px 6px;border-radius:5px;transition:all .15s;flex-shrink:0;}
+  .panel-close:hover{background:var(--border);color:var(--text);}
+
+  /* column headers inside panel */
+  .panel-col-headers{display:grid;grid-template-columns:1fr 90px 90px 90px 60px;gap:6px;padding:10px 20px 6px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .panel-col-hdr{font-size:10px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--text-muted);text-align:center;letter-spacing:.04em;text-transform:uppercase;}
+  .panel-col-hdr:first-child{text-align:left;}
+
+  .panel-body{flex:1;overflow-y:auto;padding:8px 0 8px;}
+
+  /* allocation row */
+  .alloc-row{display:grid;grid-template-columns:1fr 90px 90px 90px 60px;gap:6px;align-items:center;padding:7px 20px;border-bottom:1px solid var(--border);transition:background .1s;}
+  .alloc-row:hover{background:var(--row-hover);}
+  .alloc-name{font-size:12px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .alloc-code{font-size:10px;color:var(--text-muted);font-family:'IBM Plex Mono',monospace;margin-top:2px;}
+
+  .pct-input{
+    width:100%;padding:5px 8px;border-radius:6px;border:1px solid var(--border-strong);
+    background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;
+    text-align:center;transition:border-color .15s,background .15s;outline:none;
+  }
+  .pct-input:focus{border-color:var(--accent);background:#0d1927;}
+  .pct-input.invalid{border-color:var(--accent-3);background:#200d0d;}
+
+  /* sum badge per row */
+  .row-sum{font-size:11px;font-family:'IBM Plex Mono',monospace;text-align:center;font-weight:600;border-radius:5px;padding:3px 6px;}
+  .row-sum.ok{color:var(--accent-2);}
+  .row-sum.bad{color:var(--accent-3);}
+
+  .panel-footer{padding:14px 20px;border-top:1px solid var(--border-strong);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;}
+  .btn-reset{padding:8px 16px;border-radius:7px;border:1px solid var(--border-strong);background:none;color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600;font-family:'IBM Plex Sans',sans-serif;transition:all .15s;}
+  .btn-reset:hover{border-color:var(--accent-3);color:var(--accent-3);}
+  .btn-save{padding:8px 20px;border-radius:7px;border:none;background:var(--accent-2);color:#0d1117;cursor:pointer;font-size:12px;font-weight:700;font-family:'IBM Plex Sans',sans-serif;transition:opacity .15s;}
+  .btn-save:hover{opacity:.85;}
+  .btn-save:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* validation summary */
+  .panel-validation{padding:8px 20px;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--accent-3);display:none;}
+  .panel-validation.visible{display:block;}
+
+  /* ── PAGE BODY ── */
+  .page-body{max-width:1440px;margin:0 auto;padding:20px 24px 60px;}
+
+  .section-tabs{display:flex;gap:4px;margin-bottom:0;}
+  .tab-btn{padding:8px 18px;border-radius:8px 8px 0 0;border:1px solid var(--border);border-bottom:none;background:var(--surface);color:var(--text-muted);cursor:pointer;font-size:13px;font-family:'IBM Plex Sans',sans-serif;transition:all .15s;}
+  .tab-btn.active{background:var(--header-bg);color:var(--accent);border-color:var(--border-strong);}
+  .tab-btn:hover:not(.active){color:var(--text);}
+
+  .table-outer{border:1px solid var(--border-strong);border-radius:0 8px 8px 8px;overflow:hidden;background:var(--surface);}
+  .table-scroll{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12px;font-family:'IBM Plex Mono',monospace;}
+  thead tr.h1 th{background:#1c2942;color:var(--accent);padding:10px 14px;font-weight:600;letter-spacing:.04em;border-bottom:1px solid var(--border-strong);text-align:center;white-space:nowrap;}
+  thead tr.h1 th.cat-col{text-align:left;background:var(--header-bg);}
+  td.cat-col,th.cat-col{text-align:left;padding:8px 14px;position:sticky;left:0;z-index:2;background:var(--surface);border-right:1px solid var(--border);white-space:nowrap;}
+  thead tr.h1 th.cat-col{background:var(--header-bg);border-right:1px solid var(--border-strong);}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
+  tbody tr:hover{background:var(--row-hover);}
+  tbody tr:hover td.cat-col{background:var(--row-hover);}
+  td{padding:7px 14px;text-align:right;white-space:nowrap;color:var(--text);}
+  td.cat-name{color:var(--text);font-weight:500;}
+  td.cat-code{color:var(--text-muted);}
+  tr.total-row{background:var(--total-bg)!important;}
+  tr.total-row td{color:var(--total-text);font-weight:600;}
+  tr.total-row td.cat-col{background:var(--total-bg)!important;color:var(--total-text);}
+  tr.mwo-row{background:#1d1a0d;}
+  tr.mwo-row td{color:var(--accent-warn);}
+  tr.mwo-row td.cat-col{background:#1d1a0d!important;color:var(--accent-warn);}
+  .zero{color:var(--border-strong);}
+  .neg{color:var(--accent-3);}
+  td.placeholder{color:var(--border-strong);text-align:right;}
+
+  /* ── CHART ── */
+  .chart-outer{margin-top:20px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);padding:24px 24px 16px;}
+  .chart-title{font-size:12px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--text-muted);letter-spacing:.05em;margin-bottom:16px;text-transform:uppercase;}
+  .chart-title span{color:var(--accent);}
+  .chart-wrap{position:relative;height:320px;}
+  .chart-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--text-muted);cursor:pointer;}
+  .legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+  .legend-item.hidden{opacity:.35;}
+
+  /* ── VARIANCE VIEW ── */
+  .variance-controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:14px;border:1px solid var(--border-strong);border-radius:8px 8px 0 0;background:var(--surface);border-bottom:1px solid var(--border);}
+  .variance-controls label{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-right:6px;}
+  .variance-controls select{padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;outline:none;}
+  .variance-controls select:focus{border-color:var(--accent);}
+  .variance-empty{padding:40px;text-align:center;color:var(--text-muted);font-size:13px;}
+  td.delta-up{color:var(--accent-2);}
+  td.delta-down{color:var(--accent-3);}
+  td.delta-flat{color:var(--text-muted);}
+  tr.variance-total td{color:var(--total-text);font-weight:600;background:var(--total-bg)!important;}
+  tr.variance-total td.cat-col{background:var(--total-bg)!important;color:var(--total-text);}
+
+  /* ── CAPACITY WARNINGS ── */
+  td.cap-warn{background:rgba(240,150,50,.25)!important;color:#ffb454!important;font-weight:700;position:relative;}
+  td.cap-crit{background:rgba(240,70,70,.28)!important;color:#ff7b72!important;font-weight:700;position:relative;}
+  td.cap-warn::after,td.cap-crit::after{content:attr(data-cap-pct);display:block;font-size:9px;font-weight:400;opacity:.8;font-family:'IBM Plex Mono',monospace;}
+  .cap-legend{display:flex;gap:16px;align-items:center;padding:8px 14px;font-size:11px;color:var(--text-muted);font-family:'IBM Plex Mono',monospace;border:1px solid var(--border-strong);border-top:none;background:var(--surface);}
+  .cap-legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
+</style>
+</head>
+<body>
+
+<!-- DRAG OVERLAY -->
+<div class="drag-overlay" id="dragOverlay">
+  <div class="drag-box">
+    <div class="drag-box-icon">📂</div>
+    <div class="drag-box-title">Drop your D-Chart file</div>
+    <div class="drag-box-sub">Release to process</div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"><div class="toast-inner" id="toastInner"></div></div>
+
+<!-- SLIDE PANEL BACKDROP -->
+<div class="panel-backdrop" id="panelBackdrop" onclick="closePanel()"></div>
+
+<!-- CAPACITY SLIDE PANEL BACKDROP -->
+<div class="panel-backdrop" id="capacityBackdrop" onclick="closeCapacityPanel()"></div>
+
+<!-- CAPACITY SLIDE PANEL -->
+<div class="slide-panel" id="capacityPanel" style="width:380px">
+  <div class="panel-header">
+    <div class="panel-header-text">
+      <div class="panel-title">📦 WAREHOUSE CAPACITY</div>
+      <div class="panel-sub">Maximum SQFT per warehouse. The TOTAL row on each<br>warehouse tab is highlighted when forecast usage<br>reaches the warning / critical thresholds.</div>
+    </div>
+    <button class="panel-close" onclick="closeCapacityPanel()">✕</button>
+  </div>
+  <div class="panel-body" style="padding:14px 20px;display:flex;flex-direction:column;gap:14px;">
+    <div class="alloc-row" style="grid-template-columns:1fr 120px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <div class="alloc-name">FON (Anaheim) Max SQFT</div>
+      <input class="pct-input" type="number" min="0" step="100" id="capAnaheim" oninput="markCapacityDirty()">
+    </div>
+    <div class="alloc-row" style="grid-template-columns:1fr 120px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <div class="alloc-name">Savannah Max SQFT</div>
+      <input class="pct-input" type="number" min="0" step="100" id="capSavannah" oninput="markCapacityDirty()">
+    </div>
+    <div class="alloc-row" style="grid-template-columns:1fr 120px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <div class="alloc-name">Aurora Max SQFT</div>
+      <input class="pct-input" type="number" min="0" step="100" id="capAurora" oninput="markCapacityDirty()">
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;margin-top:4px;">Alert Thresholds</div>
+    <div class="alloc-row" style="grid-template-columns:1fr 120px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <div class="alloc-name">Warning % <span style="color:#ffb454">(Orange)</span></div>
+      <input class="pct-input" type="number" min="0" max="500" step="1" id="capWarnPct" oninput="markCapacityDirty()">
+    </div>
+    <div class="alloc-row" style="grid-template-columns:1fr 120px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <div class="alloc-name">Critical % <span style="color:#ff7b72">(Red)</span></div>
+      <input class="pct-input" type="number" min="0" max="500" step="1" id="capCritPct" oninput="markCapacityDirty()">
+    </div>
+  </div>
+  <div class="panel-footer">
+    <button class="btn-reset" onclick="resetCapacity()">↺ Reset to defaults</button>
+    <button class="btn-save" id="btnSaveCapacity" onclick="saveCapacity()">✓ Save &amp; Recalculate</button>
+  </div>
+</div>
+
+<!-- FACTORS SLIDE PANEL BACKDROP -->
+<div class="panel-backdrop" id="factorsBackdrop" onclick="closeFactorsPanel()"></div>
+
+<!-- FACTORS SLIDE PANEL -->
+<div class="slide-panel" id="factorsPanel" style="width:380px">
+  <div class="panel-header">
+    <div class="panel-header-text">
+      <div class="panel-title">🧮 WAREHOUSE SQFT FACTORS</div>
+      <div class="panel-sub">Multipliers applied per warehouse when converting allocated<br>SQFT for the FON, Savannah, and Aurora views.</div>
+    </div>
+    <button class="panel-close" onclick="closeFactorsPanel()">✕</button>
+  </div>
+  <div class="panel-body" style="padding:14px 20px;display:flex;flex-direction:column;gap:14px;">
+    <div class="alloc-row" style="grid-template-columns:1fr 100px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <div class="alloc-name">Savannah SQFT Factor</div>
+      <input class="pct-input" type="number" min="0" step="0.1" id="factorSav" oninput="markFactorsDirty()">
+    </div>
+    <div class="alloc-row" style="grid-template-columns:1fr 100px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <div class="alloc-name">FON (Anaheim) COI SQFT Factor</div>
+      <input class="pct-input" type="number" min="0" step="0.1" id="factorCoi" oninput="markFactorsDirty()">
+    </div>
+    <div class="alloc-row" style="grid-template-columns:1fr 100px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <div class="alloc-name">Aurora (AUR) SQFT Factor</div>
+      <input class="pct-input" type="number" min="0" step="0.1" id="factorAur" oninput="markFactorsDirty()">
+    </div>
+  </div>
+  <div class="panel-footer">
+    <button class="btn-reset" onclick="resetFactors()">↺ Reset to defaults</button>
+    <button class="btn-save" id="btnSaveFactors" onclick="saveFactors()">✓ Save &amp; Recalculate</button>
+  </div>
+</div>
+
+<!-- ALLOCATION SLIDE PANEL -->
+<div class="slide-panel" id="slidePanel">
+  <div class="panel-header">
+    <div class="panel-header-text">
+      <div class="panel-title">⚙ WAREHOUSE ALLOCATIONS</div>
+      <div class="panel-sub">Edit Aurora / Anaheim / Savannah % per product.<br>Each row must sum to 100%. Changes recalculate immediately.</div>
+    </div>
+    <button class="panel-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="panel-col-headers">
+    <div class="panel-col-hdr">Product</div>
+    <div class="panel-col-hdr">Aurora</div>
+    <div class="panel-col-hdr">Anaheim</div>
+    <div class="panel-col-hdr">Savannah</div>
+    <div class="panel-col-hdr">Sum</div>
+  </div>
+  <div class="panel-validation" id="panelValidation">⚠ Some rows don't sum to 100% — please fix before saving.</div>
+  <div class="panel-body" id="panelBody"></div>
+  <div class="panel-footer">
+    <button class="btn-reset" onclick="resetAllocations()">↺ Reset to defaults</button>
+    <button class="btn-save"  id="btnSave" onclick="saveAllocations()">✓ Save &amp; Recalculate</button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="app-header">
+  <div class="app-title">D-CHART <span>//</span> SUMMARY</div>
+  <div class="header-meta" id="headerMeta">
+    <span class="meta-badge" id="badgeFile">No file loaded</span>
+    <span class="meta-badge month-badge" id="badgeMonth"  style="display:none"></span>
+    <span class="meta-badge"             id="badgeMonths" style="display:none"></span>
+    <span class="meta-badge"             id="badgeArchive" style="display:none"></span>
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" onclick="openCapacityPanel()">📦 Capacity</button>
+    <button class="icon-btn" onclick="openFactorsPanel()">🧮 Factors</button>
+    <button class="icon-btn" onclick="openPanel()">⚙ Allocations</button>
+    <button class="export-btn" id="exportBtn" onclick="exportToCSV()" disabled>⬇ Export CSV</button>
+    <label class="upload-btn" id="uploadBtn">
+      ⬆ Upload New File
+      <input type="file" id="fileInput" accept=".xlsx,.xls" />
+    </label>
+  </div>
+</div>
+
+<!-- PAGE BODY -->
+<div class="page-body">
+  <div class="section-tabs">
+    <button class="tab-btn active" onclick="showSection('total')"  id="tab-total">Total SQFT</button>
+    <button class="tab-btn"        onclick="showSection('fon')"    id="tab-fon">FON (Anaheim)</button>
+    <button class="tab-btn"        onclick="showSection('sav')"    id="tab-sav">SAVANNAH</button>
+    <button class="tab-btn"        onclick="showSection('aurora')" id="tab-aurora">AURORA</button>
+    <button class="tab-btn"        onclick="showSection('variance')" id="tab-variance">📈 Forecast Variance</button>
+  </div>
+  <div class="table-outer" id="tableOuter">
+    <div class="table-scroll"><div id="tableContainer"></div></div>
+  </div>
+  <div class="cap-legend" id="capLegend" style="display:none;border-radius:0 0 8px 8px"></div>
+  <div id="varianceOuter" style="display:none">
+    <div class="variance-controls">
+      <div>
+        <label>Target Month</label>
+        <select id="varianceMonthSelect" onchange="renderVariance()"></select>
+      </div>
+      <div>
+        <label>Warehouse</label>
+        <select id="varianceSectionSelect" onchange="renderVariance()">
+          <option value="total">Total SQFT</option>
+          <option value="fon">FON (Anaheim)</option>
+          <option value="sav">Savannah</option>
+          <option value="aurora">Aurora</option>
+        </select>
+      </div>
+    </div>
+    <div class="chart-outer" id="varianceChartOuter" style="margin-top:0;border-radius:8px 8px 0 0;border-bottom:none;">
+      <div class="chart-title" id="varianceChartTitle">FORECAST VARIANCE</div>
+      <div class="chart-wrap"><canvas id="varianceChart"></canvas></div>
+      <div class="chart-legend" id="varianceChartLegend"></div>
+    </div>
+    <div class="table-outer" style="border-radius:0 0 8px 8px;border-top:none">
+      <div class="table-scroll"><div id="varianceContainer"></div></div>
+    </div>
+  </div>
+  <div class="chart-outer" id="chartOuter" style="display:none">
+    <div class="chart-title" id="chartTitle">SQFT <span>by Month · by Product</span></div>
+    <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+    <div class="chart-legend" id="chartLegend"></div>
+  </div>
+</div>
+
+<script>
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const CFT_PER_UNIT = {
+  'CG000':0.022245427822765142,'CE000':0.20191591515957447,
+  'AA200':0.18080869192171195, 'DA000':0.36711985142814546,
+  'AC000':0.14649297717230755, 'CA000':0.2867172,
+  'JC000':4.076010530227672,   'FA400':1.7640695873968495,
+  'DA300':0.2331207177168145,  'FA000':3.5976674740811667,
+  'FA500':0.08003947524272373, 'FA600':0.777120737583366,
+  'FA300':0.9663312635949804,  'CT000':1.49,
+  'HG000':1.1266775740122086,  'BC300':13.62,
+  'BC200':0,
+};
+
+// Default warehouse allocations — these can be overridden by user
+const DEFAULT_WH = {
+  'CG000':{aurora:0,   anaheim:0.2,   savannah:0.8  },
+  'CE000':{aurora:0,   anaheim:1.0,   savannah:0    },
+  'AA200':{aurora:1.0, anaheim:0,     savannah:0    },
+  'DA000':{aurora:0,   anaheim:0.2,   savannah:0.8  },
+  'AC000':{aurora:1.0, anaheim:0,     savannah:0    },
+  'CA000':{aurora:0,   anaheim:0.6,   savannah:0.4  },
+  'JC000':{aurora:0,   anaheim:0.2,   savannah:0.8  },
+  'FA400':{aurora:0,   anaheim:0.03,  savannah:0    },
+  'DA300':{aurora:0,   anaheim:1.0,   savannah:0    },
+  'FA000':{aurora:0,   anaheim:0.331, savannah:0.669},
+  'FA500':{aurora:0,   anaheim:0.315, savannah:0.685},
+  'FA600':{aurora:0,   anaheim:0.83,  savannah:0.17 },
+  'FA300':{aurora:0,   anaheim:1.0,   savannah:0    },
+  'CT000':{aurora:0,   anaheim:1.0,   savannah:0    },
+  'HG000':{aurora:0,   anaheim:0.5,   savannah:0.5  },
+  'BC300':{aurora:1.0, anaheim:0,     savannah:0    },
+  'BC200':{aurora:0,   anaheim:0,     savannah:0    },
+};
+
+const AUR_FACTOR = 2;
+const MWO_RATE   = 0.15;
+const PRODUCTS = [
+  {code:'BC200',name:'PDP Display'        },
+  {code:'BC300',name:'LCD'                },
+  {code:'CA000',name:'DVD'                },
+  {code:'CE000',name:'Home Audio'         },
+  {code:'CG000',name:'Audio Access'       },
+  {code:'CT000',name:'Technics Home Audio'},
+  {code:'AC000',name:'IMG'                },
+  {code:'DA000',name:'Comm Devices'       },
+  {code:'FA000',name:'Microwave Oven'     },
+  {code:'FA300',name:'Small Appliances'   },
+  {code:'JC000',name:'Food Service'       },
+  {code:'FA400',name:'Health Care'        },
+  {code:'FA500',name:'PCR/BTY'            },
+];
+
+const PALETTE = [
+  '#58a6ff','#3fb950','#f78166','#d29922','#bc8cff',
+  '#39d353','#ff7b72','#ffa657','#79c0ff','#56d364',
+  '#ffb3ae','#e3b341','#a5d6ff'
+];
+
+const ARCHIVE_KEY    = 'dchart_archive_v1';
+const ALLOC_KEY      = 'dchart_alloc_v1';
+const FACTORS_KEY    = 'dchart_factors_v1';
+const CAPACITY_KEY   = 'dchart_capacity_v1';
+const MAX_SNAPSHOTS  = 4; // current + last 3 distinct uploads
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let summaryData     = null;   // active snapshot (mirrors dchartArchive[activeSnapshotKey])
+let dchartArchive   = {};      // { "March 2026": {snapshotMonth, fileName, months, productData, sections, uploadedAt} }
+let archiveOrder    = [];      // insertion order of snapshot keys, oldest first, max MAX_SNAPSHOTS
+let activeSnapshotKey = null;
+let activeSection   = 'total';
+let chartInstance   = null;
+let varianceChartInstance = null;
+let hiddenDatasets  = new Set();
+let WH_FACTORS      = loadAllocations();   // live, editable copy
+let FACTORS         = loadFactors();        // live, editable CFT/MWO/AUR factors
+let CAPACITY        = loadCapacity();       // live, editable warehouse capacity limits
+
+// ─── WAREHOUSE CAPACITY STORAGE ──────────────────────────────────────────────
+function defaultCapacity(){
+  return {anaheim:0, savannah:0, aurora:0, warnPct:90, critPct:100};
+}
+function loadCapacity() {
+  try {
+    const raw = localStorage.getItem(CAPACITY_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const def = defaultCapacity();
+      return {
+        anaheim:  parsed.anaheim ?? def.anaheim,
+        savannah: parsed.savannah ?? def.savannah,
+        aurora:   parsed.aurora ?? def.aurora,
+        warnPct:  parsed.warnPct ?? def.warnPct,
+        critPct:  parsed.critPct ?? def.critPct,
+      };
+    }
+  } catch(e){}
+  return defaultCapacity();
+}
+function saveCapacityToStorage(c) {
+  try { localStorage.setItem(CAPACITY_KEY, JSON.stringify(c)); } catch(e){}
+}
+
+// ─── CONVERSION FACTORS STORAGE ──────────────────────────────────────────────
+function defaultFactors(){
+  return {sav: 4, coi: 3, aur: 2};
+}
+function loadFactors() {
+  try {
+    const raw = localStorage.getItem(FACTORS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const def = defaultFactors();
+      return {sav: parsed.sav??def.sav, coi: parsed.coi??def.coi, aur: parsed.aur??def.aur};
+    }
+  } catch(e){}
+  return defaultFactors();
+}
+function saveFactorsToStorage(f) {
+  try { localStorage.setItem(FACTORS_KEY, JSON.stringify(f)); } catch(e){}
+}
+
+// ─── ALLOCATION STORAGE ──────────────────────────────────────────────────────
+function loadAllocations() {
+  try {
+    const raw = localStorage.getItem(ALLOC_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e){}
+  return JSON.parse(JSON.stringify(DEFAULT_WH));  // deep copy
+}
+function saveAllocationsToStorage(alloc) {
+  try { localStorage.setItem(ALLOC_KEY, JSON.stringify(alloc)); } catch(e){}
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  loadFromStorage();
+  setupDragDrop();
+});
+
+// ─── DATA STORAGE (rolling archive of last MAX_SNAPSHOTS uploads) ─────────────
+function saveArchive() {
+  try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify({archive:dchartArchive, order:archiveOrder, active:activeSnapshotKey})); } catch(e){}
+}
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(ARCHIVE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      dchartArchive  = parsed.archive || {};
+      archiveOrder   = parsed.order   || [];
+      activeSnapshotKey = parsed.active || archiveOrder[archiveOrder.length-1] || null;
+      if (activeSnapshotKey && dchartArchive[activeSnapshotKey]) {
+        summaryData = dchartArchive[activeSnapshotKey];
+        rebuildSections();
+        updateHeaderMeta();
+        document.getElementById('exportBtn').disabled = false;
+        showSection(activeSection);
+        return;
+      }
+    }
+  } catch(e){}
+  renderEmpty();
+}
+
+// ─── DRAG & DROP ─────────────────────────────────────────────────────────────
+function setupDragDrop() {
+  const overlay = document.getElementById('dragOverlay');
+  document.addEventListener('dragenter', e => { if(e.dataTransfer.types.includes('Files')) overlay.classList.add('active'); });
+  document.addEventListener('dragleave', e => { if(!e.relatedTarget||e.relatedTarget===document.documentElement) overlay.classList.remove('active'); });
+  document.addEventListener('dragover',  e => e.preventDefault());
+  document.addEventListener('drop', e => {
+    e.preventDefault(); overlay.classList.remove('active');
+    const f = e.dataTransfer.files[0]; if(f) processFile(f);
+  });
+  document.getElementById('fileInput').addEventListener('change', e => {
+    if(e.target.files[0]) processFile(e.target.files[0]);
+    e.target.value = '';
+  });
+}
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg, type='info') {
+  const el=document.getElementById('toast'), inner=document.getElementById('toastInner');
+  inner.textContent=msg;
+  inner.className='toast-inner'+(type==='error'?' error':type==='success'?' success':type==='warn'?' warn':'');
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 4000);
+}
+
+// ─── FILE PROCESSING ─────────────────────────────────────────────────────────
+function processFile(file) {
+  const btn=document.getElementById('uploadBtn');
+  btn.classList.add('processing'); btn.querySelector('input').disabled=true;
+  showToast('⏳ Reading file…');
+  const reader=new FileReader();
+  reader.onload = e => {
+    try { const wb=XLSX.read(e.target.result,{type:'array'}); parseDChart(wb,file.name); }
+    catch(err) { showToast('Error: '+err.message,'error'); }
+    finally { btn.classList.remove('processing'); btn.querySelector('input').disabled=false; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─── PARSE ───────────────────────────────────────────────────────────────────
+function parseDChart(wb, fileName) {
+  const sheetName=wb.SheetNames.find(n=>n==='D-Chart')||wb.SheetNames[0];
+  if(!sheetName){ showToast('No D-Chart sheet found','error'); return; }
+  const ws=wb.Sheets[sheetName];
+  const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+  if(!data||data.length<3){ showToast('Sheet appears empty','error'); return; }
+
+  const headerRow=data[0]||[];
+  const forecastCols=[];
+  for(let c=0;c<headerRow.length;c++){
+    const v=headerRow[c];
+    if(v&&typeof v==='string'&&v.includes('Forecast'))
+      forecastCols.push({month:v.replace(' Forecast',''),colIdx:c});
+  }
+  if(!forecastCols.length){ showToast('No Forecast months found','error'); return; }
+
+  const usedMonths=forecastCols.slice(0,6);
+  const currentMonth=usedMonths[0].month;
+
+  const productData={};
+  for(let r=2;r<data.length;r++){
+    const row=data[r];
+    if(!row||!row[1]||!row[2]) continue;
+    const catCode=String(row[2]).trim();
+    const lineType=row[4]?String(row[4]).trim():'';
+    if(!CFT_PER_UNIT.hasOwnProperty(catCode)&&catCode!=='BC200') continue;
+    if(!productData[catCode]) productData[catCode]={months:{},bp:{ns:0,inv:0}};
+    if(lineType===currentMonth){
+      for(const m of usedMonths)
+        productData[catCode].months[m.month]={ns:toNum(row[m.colIdx+3]),inv:toNum(row[m.colIdx+4])};
+    } else if(lineType==='BP'){
+      productData[catCode].bp={ns:toNum(row[usedMonths[0].colIdx+3]),inv:toNum(row[usedMonths[0].colIdx+4])};
+    }
+  }
+
+  // Build/replace the archive entry for this snapshot month
+  const entry = {snapshotMonth: currentMonth, months: usedMonths.map(m=>m.month), fileName, productData, uploadedAt: Date.now()};
+  dchartArchive[currentMonth] = entry;
+  if (!archiveOrder.includes(currentMonth)) archiveOrder.push(currentMonth);
+  else { // re-upload of same snapshot month — move to most-recent position
+    archiveOrder = archiveOrder.filter(k=>k!==currentMonth);
+    archiveOrder.push(currentMonth);
+  }
+  // Prune to rolling window: keep only the last MAX_SNAPSHOTS distinct uploads
+  while (archiveOrder.length > MAX_SNAPSHOTS) {
+    const oldest = archiveOrder.shift();
+    delete dchartArchive[oldest];
+  }
+
+  activeSnapshotKey = currentMonth;
+  summaryData = entry;
+  rebuildSections();
+  saveArchive();
+  updateHeaderMeta();
+  document.getElementById('exportBtn').disabled=false;
+  hiddenDatasets.clear();
+  showToast(`✓ ${fileName} · ${currentMonth} · ${usedMonths.length} months (archive: ${archiveOrder.length}/${MAX_SNAPSHOTS})`,'success');
+  showSection(activeSection);
+}
+
+// ─── BUILD SECTIONS (called on parse AND after allocation change) ─────────────
+function computeSections(months, productData){
+  const sections = {};
+  for(const section of ['total','fon','sav','aurora']){
+    const rows=[];
+    const totals=new Array(months.length).fill(0);
+    for(const prod of PRODUCTS){
+      const {code}=prod;
+      const cft=CFT_PER_UNIT[code]||0;
+      const pd=productData[code];
+      const values=months.map(m=>{
+        if(!pd||!pd.months[m]) return 0;
+        const {ns,inv}=pd.months[m];
+        return applyWarehouse((inv+ns*MWO_RATE)*cft/2,code,section);
+      });
+      rows.push({code,name:prod.name,values});
+      values.forEach((v,i)=>totals[i]+=v);
+    }
+    const mwoRow=rows.find(r=>r.code==='FA000');
+    const mwoOverstack=mwoRow?mwoRow.values.map(v=>v*0.33):new Array(months.length).fill(0);
+    sections[section]={rows,totals,mwoOverstack};
+  }
+  return sections;
+}
+
+function rebuildSections() {
+  if(!summaryData||!summaryData.productData) return;
+  summaryData.sections = computeSections(summaryData.months, summaryData.productData);
+}
+
+function applyWarehouse(sqft,code,section){
+  if(section==='total') return sqft;
+  const wh=WH_FACTORS[code]; if(!wh) return 0;
+  if(section==='fon')    return sqft*wh.anaheim *FACTORS.coi;
+  if(section==='sav')    return sqft*wh.savannah*FACTORS.sav;
+  if(section==='aurora') return sqft*wh.aurora  *FACTORS.aur;
+  return 0;
+}
+function toNum(v){
+  if(v===null||v===undefined||v===''||v==='#N/A') return 0;
+  const n=parseFloat(v); return isNaN(n)?0:n;
+}
+
+// ─── HEADER META ─────────────────────────────────────────────────────────────
+function updateHeaderMeta(){
+  if(!summaryData) return;
+  const f=document.getElementById('badgeFile'),m=document.getElementById('badgeMonth'),ms=document.getElementById('badgeMonths'),ab=document.getElementById('badgeArchive');
+  f.textContent='📄 '+summaryData.fileName; f.className='meta-badge has-data';
+  m.textContent='📅 '+summaryData.snapshotMonth; m.style.display='';
+  ms.textContent=summaryData.months.join(' → '); ms.style.display='';
+  ab.textContent='🗂 '+archiveOrder.length+' snapshot'+(archiveOrder.length===1?'':'s')+' archived';
+  ab.style.display='';
+}
+
+// ─── SECTION TABS ────────────────────────────────────────────────────────────
+function showSection(section){
+  activeSection=section;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+section).classList.add('active');
+  hiddenDatasets.clear();
+
+  const tableOuter=document.getElementById('tableOuter');
+  const varianceOuter=document.getElementById('varianceOuter');
+
+  if(section==='variance'){
+    tableOuter.style.display='none';
+    varianceOuter.style.display='';
+    document.getElementById('capLegend').style.display='none';
+    hideChart();
+    renderVariance();
+    return;
+  }
+  tableOuter.style.display='';
+  varianceOuter.style.display='none';
+  summaryData?renderTable(section):renderEmpty();
+  summaryData?renderChart(section):hideChart();
+}
+
+// ─── FORMAT ──────────────────────────────────────────────────────────────────
+function fmt(v){
+  if(!v||v===0) return '<span class="zero">—</span>';
+  const abs=Math.abs(v),s=abs>=1000?(abs/1000).toFixed(1)+'k':abs.toFixed(1);
+  return v<0?`<span class="neg">(${s})</span>`:s;
+}
+
+// ─── EMPTY STATE ─────────────────────────────────────────────────────────────
+function renderEmpty(){
+  const ph=['Mon 1','Mon 2','Mon 3','Mon 4','Mon 5','Mon 6'];
+  let html=`<table><thead><tr class="h1">
+    <th class="cat-col" style="min-width:180px">Product Category</th>
+    <th class="cat-col" style="min-width:64px">Code</th>
+    ${ph.map(m=>`<th style="min-width:94px">${m}<br><span style="font-weight:400;opacity:.4;font-size:10px">Forecast</span></th>`).join('')}
+  </tr></thead><tbody>`;
+  for(const p of PRODUCTS)
+    html+=`<tr><td class="cat-col cat-name" style="opacity:.35">${p.name}</td><td class="cat-col cat-code" style="opacity:.25">${p.code}</td>${ph.map(()=>`<td class="placeholder">—</td>`).join('')}</tr>`;
+  html+=`<tr class="total-row"><td class="cat-col" style="opacity:.4;font-weight:700">TOTAL</td><td class="cat-col"></td>${ph.map(()=>`<td class="placeholder">—</td>`).join('')}</tr>
+  </tbody></table><div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px;">No data — click <strong style="color:var(--accent)">⬆ Upload New File</strong> to begin</div>`;
+  document.getElementById('tableContainer').innerHTML=html;
+  hideChart();
+}
+function hideChart(){ document.getElementById('chartOuter').style.display='none'; }
+
+// ─── RENDER TABLE ────────────────────────────────────────────────────────────
+function renderTable(section){
+  if(!summaryData){ renderEmpty(); return; }
+  const {months,sections}=summaryData;
+  const {rows,totals,mwoOverstack}=sections[section];
+  let html=`<table><thead><tr class="h1">
+    <th class="cat-col" style="min-width:180px">Product Category</th>
+    <th class="cat-col" style="min-width:64px">Code</th>
+    ${months.map(m=>`<th style="min-width:94px">${m}<br><span style="font-weight:400;opacity:.6;font-size:10px">Forecast</span></th>`).join('')}
+  </tr></thead><tbody>`;
+  for(const row of rows)
+    html+=`<tr><td class="cat-col cat-name">${row.name}</td><td class="cat-col cat-code">${row.code}</td>${row.values.map(v=>`<td>${fmt(v)}</td>`).join('')}</tr>`;
+  const capMap={fon:CAPACITY.anaheim, sav:CAPACITY.savannah, aurora:CAPACITY.aurora};
+  const capLimit=capMap[section];
+  const totalCells = totals.map(v=>{
+    if(section==='total' || !capLimit || capLimit<=0) return `<td>${fmt(v)}</td>`;
+    const pct=(v/capLimit)*100;
+    if(pct>=CAPACITY.critPct) return `<td class="cap-crit" data-cap-pct="${pct.toFixed(0)}% of ${fmt(capLimit)}">${fmt(v)}</td>`;
+    if(pct>=CAPACITY.warnPct) return `<td class="cap-warn" data-cap-pct="${pct.toFixed(0)}% of ${fmt(capLimit)}">${fmt(v)}</td>`;
+    return `<td>${fmt(v)}</td>`;
+  });
+  html+=`<tr class="total-row"><td class="cat-col" style="font-weight:700">TOTAL</td><td class="cat-col"></td>${totalCells.join('')}</tr>`;
+  if(section!=='aurora')
+    html+=`<tr class="mwo-row"><td class="cat-col">MWO Overstacking (33%)</td><td class="cat-col">FA000</td>${mwoOverstack.map(v=>`<td>${fmt(v)}</td>`).join('')}</tr>`;
+  html+=`</tbody></table>`;
+  document.getElementById('tableContainer').innerHTML=html;
+
+  const legendEl=document.getElementById('capLegend');
+  if(section!=='total' && capLimit>0){
+    legendEl.style.display='flex';
+    legendEl.innerHTML=`<span><span class="sw" style="background:var(--surface);border:1px solid var(--border-strong)"></span>OK (&lt; ${CAPACITY.warnPct}%)</span>
+      <span><span class="sw" style="background:rgba(240,150,50,.6)"></span>Warning (≥ ${CAPACITY.warnPct}%)</span>
+      <span><span class="sw" style="background:rgba(240,70,70,.6)"></span>Critical (≥ ${CAPACITY.critPct}%)</span>
+      <span style="margin-left:auto">Capacity limit: ${fmt(capLimit)} sqft</span>`;
+  } else {
+    legendEl.style.display='none';
+    legendEl.innerHTML='';
+  }
+}
+
+// ─── RENDER CHART ────────────────────────────────────────────────────────────
+function renderChart(section){
+  if(!summaryData){ hideChart(); return; }
+  const {months,sections}=summaryData;
+  const {rows}=sections[section];
+  const activeRows=rows.filter(r=>r.values.some(v=>v>0));
+  if(!activeRows.length){ hideChart(); return; }
+  const sectionLabel={total:'Total SQFT',fon:'FON — Anaheim',sav:'Savannah',aurora:'Aurora'}[section];
+  const datasets=activeRows.map((row,i)=>({
+    label:row.name,
+    data:row.values.map(v=>parseFloat(v.toFixed(2))),
+    backgroundColor:PALETTE[i%PALETTE.length]+'cc',
+    borderColor:PALETTE[i%PALETTE.length],
+    borderWidth:1,borderRadius:3,
+    hidden:hiddenDatasets.has(i),
+  }));
+  if(chartInstance){ chartInstance.destroy(); chartInstance=null; }
+  const ctx=document.getElementById('barChart').getContext('2d');
+  chartInstance=new Chart(ctx,{
+    type:'bar',data:{labels:months,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:{duration:400},
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#1c2128',borderColor:'#30363d',borderWidth:1,titleColor:'#58a6ff',bodyColor:'#e6edf3',padding:10,
+          callbacks:{label:ctx=>` ${ctx.dataset.label}: ${ctx.parsed.y>=1000?(ctx.parsed.y/1000).toFixed(1)+'k':ctx.parsed.y.toFixed(1)} sqft`}}
+      },
+      scales:{
+        x:{grid:{color:'#21262d'},ticks:{color:'#7d8590',font:{family:'IBM Plex Mono',size:11}},border:{color:'#30363d'}},
+        y:{grid:{color:'#21262d'},ticks:{color:'#7d8590',font:{family:'IBM Plex Mono',size:11},callback:v=>v>=1000?(v/1000).toFixed(1)+'k':v},
+           border:{color:'#30363d'},title:{display:true,text:'SQFT',color:'#7d8590',font:{family:'IBM Plex Mono',size:11}}}
+      }
+    }
+  });
+  const legendEl=document.getElementById('chartLegend');
+  legendEl.innerHTML=activeRows.map((row,i)=>`
+    <div class="legend-item${hiddenDatasets.has(i)?' hidden':''}" onclick="toggleDataset(${i})" data-idx="${i}">
+      <div class="legend-dot" style="background:${PALETTE[i%PALETTE.length]}"></div>${row.name}
+    </div>`).join('');
+  document.getElementById('chartOuter').style.display='';
+  document.getElementById('chartTitle').innerHTML=`${sectionLabel} <span>· SQFT by Month by Product</span>`;
+}
+
+function toggleDataset(idx){
+  if(!chartInstance) return;
+  const meta=chartInstance.getDatasetMeta(idx);
+  if(hiddenDatasets.has(idx)){ hiddenDatasets.delete(idx); meta.hidden=false; }
+  else { hiddenDatasets.add(idx); meta.hidden=true; }
+  chartInstance.update();
+  document.querySelectorAll('.legend-item').forEach(el=>{
+    el.classList.toggle('hidden',hiddenDatasets.has(parseInt(el.dataset.idx)));
+  });
+}
+
+// ─── CAPACITY PANEL ──────────────────────────────────────────────────────────
+function openCapacityPanel(){
+  buildCapacityRows();
+  document.getElementById('capacityPanel').classList.add('open');
+  document.getElementById('capacityBackdrop').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeCapacityPanel(){
+  document.getElementById('capacityPanel').classList.remove('open');
+  document.getElementById('capacityBackdrop').classList.remove('open');
+  document.body.style.overflow='';
+}
+function buildCapacityRows(){
+  document.getElementById('capAnaheim').value=CAPACITY.anaheim;
+  document.getElementById('capSavannah').value=CAPACITY.savannah;
+  document.getElementById('capAurora').value=CAPACITY.aurora;
+  document.getElementById('capWarnPct').value=CAPACITY.warnPct;
+  document.getElementById('capCritPct').value=CAPACITY.critPct;
+  document.getElementById('btnSaveCapacity').disabled=true;
+}
+function markCapacityDirty(){
+  document.getElementById('btnSaveCapacity').disabled=false;
+}
+function saveCapacity(){
+  const def=defaultCapacity();
+  const num=(id,fallback)=>{ const v=parseFloat(document.getElementById(id).value); return isNaN(v)?fallback:v; };
+  let warnPct=num('capWarnPct',def.warnPct);
+  let critPct=num('capCritPct',def.critPct);
+  if(warnPct>critPct) [warnPct,critPct]=[critPct,warnPct]; // keep sane ordering
+  CAPACITY={
+    anaheim:  Math.max(0,num('capAnaheim',def.anaheim)),
+    savannah: Math.max(0,num('capSavannah',def.savannah)),
+    aurora:   Math.max(0,num('capAurora',def.aurora)),
+    warnPct:  Math.max(0,warnPct),
+    critPct:  Math.max(0,critPct),
+  };
+  saveCapacityToStorage(CAPACITY);
+  if(summaryData) showSection(activeSection);
+  closeCapacityPanel();
+  showToast('✓ Capacity limits saved — table updated','success');
+}
+function resetCapacity(){
+  if(!confirm('Reset warehouse capacity limits and thresholds to defaults?')) return;
+  CAPACITY=defaultCapacity();
+  saveCapacityToStorage(CAPACITY);
+  buildCapacityRows();
+  if(summaryData) showSection(activeSection);
+  showToast('Capacity settings reset to defaults','info');
+}
+
+// ─── FACTORS PANEL ───────────────────────────────────────────────────────────
+function openFactorsPanel(){
+  buildFactorsRows();
+  document.getElementById('factorsPanel').classList.add('open');
+  document.getElementById('factorsBackdrop').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeFactorsPanel(){
+  document.getElementById('factorsPanel').classList.remove('open');
+  document.getElementById('factorsBackdrop').classList.remove('open');
+  document.body.style.overflow='';
+}
+function buildFactorsRows(){
+  document.getElementById('factorSav').value=FACTORS.sav;
+  document.getElementById('factorCoi').value=FACTORS.coi;
+  document.getElementById('factorAur').value=FACTORS.aur;
+  document.getElementById('btnSaveFactors').disabled=true;
+}
+function markFactorsDirty(){
+  document.getElementById('btnSaveFactors').disabled=false;
+}
+function saveFactors(){
+  const sav=parseFloat(document.getElementById('factorSav').value);
+  const coi=parseFloat(document.getElementById('factorCoi').value);
+  const aur=parseFloat(document.getElementById('factorAur').value);
+  const def=defaultFactors();
+  FACTORS={
+    sav: isNaN(sav)?def.sav:sav,
+    coi: isNaN(coi)?def.coi:coi,
+    aur: isNaN(aur)?def.aur:aur,
+  };
+  saveFactorsToStorage(FACTORS);
+  if(summaryData && summaryData.productData){
+    rebuildSections();
+    saveArchive();
+    hiddenDatasets.clear();
+    showSection(activeSection);
+  }
+  closeFactorsPanel();
+  showToast('✓ Warehouse factors saved — table recalculated','success');
+}
+function resetFactors(){
+  if(!confirm('Reset warehouse SQFT factors to default values (Sav 4, COI 3, AUR 2)?')) return;
+  FACTORS=defaultFactors();
+  saveFactorsToStorage(FACTORS);
+  buildFactorsRows();
+  if(summaryData && summaryData.productData){
+    rebuildSections();
+    saveArchive();
+    hiddenDatasets.clear();
+    showSection(activeSection);
+  }
+  showToast('Warehouse factors reset to defaults — table recalculated','info');
+}
+
+// ─── ALLOCATION PANEL ────────────────────────────────────────────────────────
+function openPanel(){
+  buildPanelRows();
+  document.getElementById('slidePanel').classList.add('open');
+  document.getElementById('panelBackdrop').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closePanel(){
+  document.getElementById('slidePanel').classList.remove('open');
+  document.getElementById('panelBackdrop').classList.remove('open');
+  document.body.style.overflow='';
+}
+
+function buildPanelRows(){
+  const body=document.getElementById('panelBody');
+  body.innerHTML='';
+  for(const prod of PRODUCTS){
+    const wh=WH_FACTORS[prod.code]||{aurora:0,anaheim:0,savannah:0};
+    const aur=Math.round(wh.aurora*100);
+    const anh=Math.round(wh.anaheim*100);
+    const sav=Math.round(wh.savannah*100);
+    const row=document.createElement('div');
+    row.className='alloc-row';
+    row.dataset.code=prod.code;
+    row.innerHTML=`
+      <div>
+        <div class="alloc-name" title="${prod.name}">${prod.name}</div>
+        <div class="alloc-code">${prod.code}</div>
+      </div>
+      <input class="pct-input" type="number" min="0" max="100" step="1" value="${aur}"  data-wh="aurora"    oninput="onAllocInput(this)">
+      <input class="pct-input" type="number" min="0" max="100" step="1" value="${anh}"  data-wh="anaheim"   oninput="onAllocInput(this)">
+      <input class="pct-input" type="number" min="0" max="100" step="1" value="${sav}"  data-wh="savannah"  oninput="onAllocInput(this)">
+      <div class="row-sum" id="sum-${prod.code}">${aur+anh+sav}%</div>`;
+    body.appendChild(row);
+    updateRowSum(prod.code, aur+anh+sav);
+  }
+  validatePanel();
+}
+
+function onAllocInput(input){
+  const row=input.closest('.alloc-row');
+  const code=row.dataset.code;
+  const inputs=[...row.querySelectorAll('.pct-input')];
+  const vals=inputs.map(i=>parseInt(i.value)||0);
+  const sum=vals.reduce((a,b)=>a+b,0);
+  updateRowSum(code,sum);
+  validatePanel();
+}
+
+function updateRowSum(code,sum){
+  const el=document.getElementById('sum-'+code);
+  if(!el) return;
+  el.textContent=sum+'%';
+  el.className='row-sum '+(sum===100?'ok':'bad');
+}
+
+function validatePanel(){
+  let allOk=true;
+  for(const prod of PRODUCTS){
+    const row=document.querySelector(`.alloc-row[data-code="${prod.code}"]`);
+    if(!row) continue;
+    const inputs=[...row.querySelectorAll('.pct-input')];
+    const sum=inputs.map(i=>parseInt(i.value)||0).reduce((a,b)=>a+b,0);
+    if(sum!==100) allOk=false;
+    inputs.forEach(i=>{ const v=parseInt(i.value)||0; i.classList.toggle('invalid',v<0||v>100); });
+  }
+  document.getElementById('panelValidation').classList.toggle('visible',!allOk);
+  document.getElementById('btnSave').disabled=!allOk;
+  return allOk;
+}
+
+function saveAllocations(){
+  if(!validatePanel()){ showToast('Fix rows that don\'t sum to 100% first','warn'); return; }
+  // Read values from panel and update WH_FACTORS
+  for(const prod of PRODUCTS){
+    const row=document.querySelector(`.alloc-row[data-code="${prod.code}"]`);
+    if(!row) continue;
+    const inputs=[...row.querySelectorAll('.pct-input')];
+    WH_FACTORS[prod.code]={
+      aurora:   (parseInt(inputs[0].value)||0)/100,
+      anaheim:  (parseInt(inputs[1].value)||0)/100,
+      savannah: (parseInt(inputs[2].value)||0)/100,
+    };
+  }
+  saveAllocationsToStorage(WH_FACTORS);
+  // Recalculate sections with new allocations
+  if(summaryData && summaryData.productData){
+    rebuildSections();
+    saveArchive();
+    hiddenDatasets.clear();
+    showSection(activeSection);
+  }
+  closePanel();
+  showToast('✓ Allocations saved — table recalculated','success');
+}
+
+function resetAllocations(){
+  if(!confirm('Reset all warehouse allocations to default values?')) return;
+  WH_FACTORS=JSON.parse(JSON.stringify(DEFAULT_WH));
+  saveAllocationsToStorage(WH_FACTORS);
+  buildPanelRows();
+  showToast('Allocations reset to defaults','info');
+}
+
+// ─── EXPORT ──────────────────────────────────────────────────────────────────
+function exportToCSV(){
+  if(!summaryData) return;
+  const {months,fileName,sections}=summaryData;
+  let csv='';
+  for(const [sec,label] of Object.entries({total:'Total SQFT',fon:'FON Anaheim',sav:'Savannah',aurora:'Aurora'})){
+    const {rows,totals}=sections[sec];
+    csv+=`\n${label}\nProduct,Code,${months.join(',')}\n`;
+    rows.forEach(r=>{ csv+=`"${r.name}",${r.code},${r.values.map(v=>v.toFixed(2)).join(',')}\n`; });
+    csv+=`TOTAL,,${totals.map(v=>v.toFixed(2)).join(',')}\n`;
+  }
+  const a=Object.assign(document.createElement('a'),{
+    href:URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
+    download:'dchart_summary_'+(summaryData.snapshotMonth||'').replace(' ','_')+'.csv'
+  });
+  a.click();
+}
+
+// ─── FORECAST VARIANCE ANALYSIS ────────────────────────────────────────────────
+function monthToDate(m){
+  const parts=String(m).trim().split(' ');
+  const idx=MONTH_NAMES.indexOf(parts[0]);
+  const yr=parseInt(parts[1],10);
+  if(idx<0||isNaN(yr)) return new Date(0);
+  return new Date(yr, idx, 1);
+}
+
+function getOrderedSnapshots(){
+  // chronological by snapshot month (oldest -> newest), not just upload order
+  return archiveOrder
+    .map(k=>dchartArchive[k])
+    .filter(Boolean)
+    .sort((a,b)=>monthToDate(a.snapshotMonth)-monthToDate(b.snapshotMonth));
+}
+
+function populateVarianceMonthSelect(){
+  const sel=document.getElementById('varianceMonthSelect');
+  const prev=sel.value;
+  const monthsSet=new Map(); // monthName -> Date
+  getOrderedSnapshots().forEach(snap=>snap.months.forEach(m=>monthsSet.set(m,monthToDate(m))));
+  const months=[...monthsSet.keys()].sort((a,b)=>monthsSet.get(a)-monthsSet.get(b));
+  sel.innerHTML=months.map(m=>`<option value="${m}">${m}</option>`).join('');
+  if(months.includes(prev)) sel.value=prev;
+  else if(activeSnapshotKey && dchartArchive[activeSnapshotKey] && months.length>1)
+    sel.value=months[months.length-1]; // default to the furthest-out month
+}
+
+function renderVariance(){
+  const container=document.getElementById('varianceContainer');
+  const snapshots=getOrderedSnapshots();
+  if(!snapshots.length){
+    container.innerHTML=`<div class="variance-empty">No archived snapshots yet — upload at least one D-Chart file.</div>`;
+    document.getElementById('varianceChartOuter').style.display='none';
+    return;
+  }
+  populateVarianceMonthSelect();
+  const targetMonth=document.getElementById('varianceMonthSelect').value;
+  const section=document.getElementById('varianceSectionSelect').value;
+  if(!targetMonth){
+    container.innerHTML=`<div class="variance-empty">No target month available.</div>`;
+    document.getElementById('varianceChartOuter').style.display='none';
+    return;
+  }
+
+  // Snapshots whose forecast window included the target month
+  const relevant=snapshots.filter(s=>s.months.includes(targetMonth));
+  if(!relevant.length){
+    container.innerHTML=`<div class="variance-empty">No archived snapshot forecasted ${targetMonth}.</div>`;
+    document.getElementById('varianceChartOuter').style.display='none';
+    return;
+  }
+
+  // For each relevant snapshot, compute the section's values for the target month
+  const colData=relevant.map(snap=>{
+    const sections=computeSections(snap.months,snap.productData);
+    const sec=sections[section];
+    const idx=snap.months.indexOf(targetMonth);
+    const rowVals={};
+    sec.rows.forEach(r=>{ rowVals[r.code]=r.values[idx]; });
+    return {snap, total:sec.totals[idx], rowVals};
+  });
+
+  const sectionLabel={total:'Total SQFT',fon:'FON — Anaheim',sav:'Savannah',aurora:'Aurora'}[section];
+
+  // ── Grouped bar chart: x-axis = products, one dataset per snapshot ──────────
+  const activeCodes=PRODUCTS.filter(p=>colData.some(c=>(c.rowVals[p.code]||0)>0.0001));
+  if(varianceChartInstance){ varianceChartInstance.destroy(); varianceChartInstance=null; }
+  if(activeCodes.length){
+    const labels=activeCodes.map(p=>p.name);
+    const datasets=colData.map((c,i)=>({
+      label:c.snap.snapshotMonth+' file'+(c.snap.snapshotMonth===activeSnapshotKey?' (current)':''),
+      data:activeCodes.map(p=>parseFloat((c.rowVals[p.code]||0).toFixed(2))),
+      backgroundColor:PALETTE[i%PALETTE.length]+'cc',
+      borderColor:PALETTE[i%PALETTE.length],
+      borderWidth:1,borderRadius:3,
+    }));
+    const ctx=document.getElementById('varianceChart').getContext('2d');
+    varianceChartInstance=new Chart(ctx,{
+      type:'bar',data:{labels,datasets},
+      options:{
+        responsive:true,maintainAspectRatio:false,animation:{duration:300},
+        plugins:{
+          legend:{display:false},
+          tooltip:{backgroundColor:'#1c2128',borderColor:'#30363d',borderWidth:1,titleColor:'#58a6ff',bodyColor:'#e6edf3',padding:10,
+            callbacks:{label:ctx=>` ${ctx.dataset.label}: ${ctx.parsed.y>=1000?(ctx.parsed.y/1000).toFixed(1)+'k':ctx.parsed.y.toFixed(1)} sqft`}}
+        },
+        scales:{
+          x:{grid:{color:'#21262d'},ticks:{color:'#7d8590',font:{family:'IBM Plex Mono',size:11}},border:{color:'#30363d'}},
+          y:{grid:{color:'#21262d'},ticks:{color:'#7d8590',font:{family:'IBM Plex Mono',size:11},callback:v=>v>=1000?(v/1000).toFixed(1)+'k':v},
+             border:{color:'#30363d'},title:{display:true,text:'SQFT',color:'#7d8590',font:{family:'IBM Plex Mono',size:11}}}
+        }
+      }
+    });
+    document.getElementById('varianceChartOuter').style.display='';
+    document.getElementById('varianceChartTitle').innerHTML=`${sectionLabel} <span>· predictions for ${targetMonth} across snapshots</span>`;
+    document.getElementById('varianceChartLegend').innerHTML=colData.map((c,i)=>`
+      <div class="legend-item">
+        <div class="legend-dot" style="background:${PALETTE[i%PALETTE.length]}"></div>${c.snap.snapshotMonth} file${c.snap.snapshotMonth===activeSnapshotKey?' (current)':''}
+      </div>`).join('');
+  } else {
+    document.getElementById('varianceChartOuter').style.display='none';
+  }
+
+  let html=`<table><thead><tr class="h1">
+    <th class="cat-col" style="min-width:180px">Product Category</th>
+    <th class="cat-col" style="min-width:64px">Code</th>
+    ${colData.map(c=>{
+      const isCurrent=c.snap.snapshotMonth===activeSnapshotKey;
+      return `<th style="min-width:140px">${c.snap.snapshotMonth} File${isCurrent?' <span style="color:var(--accent)">(current)</span>':''}<br>
+        <span style="font-weight:400;opacity:.6;font-size:10px">predicted ${targetMonth}</span></th>`;
+    }).join('')}
+  </tr></thead><tbody>`;
+
+  for(const prod of PRODUCTS){
+    html+=`<tr><td class="cat-col cat-name">${prod.name}</td><td class="cat-col cat-code">${prod.code}</td>`;
+    colData.forEach((c,i)=>{
+      const val=c.rowVals[prod.code]||0;
+      let deltaCell='';
+      if(i>0){
+        const prevVal=colData[i-1].rowVals[prod.code]||0;
+        const diff=val-prevVal;
+        if(Math.abs(diff)>=0.05){
+          const cls=diff>0?'delta-up':'delta-down';
+          const sign=diff>0?'+':'';
+          deltaCell=` <span class="${cls}" style="font-size:10px">(${sign}${fmtPlain(diff)})</span>`;
+        }
+      }
+      html+=`<td>${fmt(val)}${deltaCell}</td>`;
+    });
+    html+=`</tr>`;
+  }
+
+  html+=`<tr class="variance-total"><td class="cat-col" style="font-weight:700">TOTAL — ${sectionLabel}</td><td class="cat-col"></td>`;
+  colData.forEach((c,i)=>{
+    let deltaCell='';
+    if(i>0){
+      const diff=c.total-colData[i-1].total;
+      if(Math.abs(diff)>=0.05){
+        const cls=diff>0?'delta-up':'delta-down';
+        const sign=diff>0?'+':'';
+        deltaCell=` <span class="${cls}" style="font-size:10px">(${sign}${fmtPlain(diff)})</span>`;
+      }
+    }
+    html+=`<td>${fmt(c.total)}${deltaCell}</td>`;
+  });
+  html+=`</tr></tbody></table>`;
+  container.innerHTML=html;
+}
+
+function fmtPlain(v){
+  const abs=Math.abs(v),s=abs>=1000?(abs/1000).toFixed(1)+'k':abs.toFixed(1);
+  return s;
+}
+</script>
+</body>
+</html>
