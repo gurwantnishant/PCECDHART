@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>D-Chart Summary Generator</title>
+<title>PCEC WH SQFT FORECAST</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -173,6 +173,16 @@
   td.cap-crit{background:rgba(240,70,70,.28)!important;color:#ff7b72!important;font-weight:700;position:relative;}
   td.cap-warn::after,td.cap-crit::after{content:attr(data-cap-pct);display:block;font-size:9px;font-weight:400;opacity:.8;font-family:'IBM Plex Mono',monospace;}
   .cap-legend{display:flex;gap:16px;align-items:center;padding:8px 14px;font-size:11px;color:var(--text-muted);font-family:'IBM Plex Mono',monospace;border:1px solid var(--border-strong);border-top:none;background:var(--surface);}
+  /* ── HOW IT WORKS PANEL ── */
+  .about-panel{background:var(--surface);border:1px solid var(--border-strong);border-radius:0 8px 8px 8px;padding:32px 36px;max-width:860px;line-height:1.7;font-size:13.5px;color:var(--text);}
+  .about-panel h2{font-size:14px;font-weight:700;margin:28px 0 10px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;font-family:'IBM Plex Mono',monospace;}
+  .about-panel h2:first-child{margin-top:0;}
+  .about-panel p{margin:6px 0;color:var(--text);}
+  .about-panel ol,.about-panel ul{margin:8px 0 8px 22px;padding:0;}
+  .about-panel li{margin:7px 0;}
+  .about-panel strong{color:var(--text);font-weight:600;}
+  .about-panel code{background:var(--header-bg);border:1px solid var(--border-strong);padding:3px 8px;border-radius:5px;font-size:11.5px;font-family:'IBM Plex Mono',monospace;color:var(--accent-warn);}
+  .about-panel .note{font-size:11.5px;color:var(--text-muted);margin-top:20px;padding-top:14px;border-top:1px solid var(--border);}
   .cap-legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
 </style>
 </head>
@@ -207,8 +217,8 @@
   </div>
   <div class="panel-body" style="padding:14px 20px;display:flex;flex-direction:column;gap:14px;">
     <div class="alloc-row" style="grid-template-columns:1fr 120px;padding:7px 0;border-bottom:1px solid var(--border);">
-      <div class="alloc-name">FON (Anaheim) Max SQFT</div>
-      <input class="pct-input" type="number" min="0" step="100" id="capAnaheim" oninput="markCapacityDirty()">
+      <div class="alloc-name">FONTANA Max SQFT</div>
+      <input class="pct-input" type="number" min="0" step="100" id="capFontana" oninput="markCapacityDirty()">
     </div>
     <div class="alloc-row" style="grid-template-columns:1fr 120px;padding:7px 0;border-bottom:1px solid var(--border);">
       <div class="alloc-name">Savannah Max SQFT</div>
@@ -252,7 +262,7 @@
       <input class="pct-input" type="number" min="0" step="0.1" id="factorSav" oninput="markFactorsDirty()">
     </div>
     <div class="alloc-row" style="grid-template-columns:1fr 100px;padding:7px 0;border-bottom:1px solid var(--border);">
-      <div class="alloc-name">FON (Anaheim) COI SQFT Factor</div>
+      <div class="alloc-name">FONTANA COI SQFT Factor</div>
       <input class="pct-input" type="number" min="0" step="0.1" id="factorCoi" oninput="markFactorsDirty()">
     </div>
     <div class="alloc-row" style="grid-template-columns:1fr 100px;padding:7px 0;border-bottom:1px solid var(--border);">
@@ -271,14 +281,14 @@
   <div class="panel-header">
     <div class="panel-header-text">
       <div class="panel-title">⚙ WAREHOUSE ALLOCATIONS</div>
-      <div class="panel-sub">Edit Aurora / Anaheim / Savannah % per product.<br>Each row must sum to 100%. Changes recalculate immediately.</div>
+      <div class="panel-sub">Edit Aurora / FONTANA / Savannah % per product.<br>Each row must sum to 100%. Changes recalculate immediately.</div>
     </div>
     <button class="panel-close" onclick="closePanel()">✕</button>
   </div>
   <div class="panel-col-headers">
     <div class="panel-col-hdr">Product</div>
     <div class="panel-col-hdr">Aurora</div>
-    <div class="panel-col-hdr">Anaheim</div>
+    <div class="panel-col-hdr">FONTANA</div>
     <div class="panel-col-hdr">Savannah</div>
     <div class="panel-col-hdr">Sum</div>
   </div>
@@ -292,7 +302,7 @@
 
 <!-- HEADER -->
 <div class="app-header">
-  <div class="app-title">D-CHART <span>//</span> SUMMARY</div>
+  <div class="app-title">PCEC <span>//</span> WH SQFT FORECAST</div>
   <div class="header-meta" id="headerMeta">
     <span class="meta-badge" id="badgeFile">No file loaded</span>
     <span class="meta-badge month-badge" id="badgeMonth"  style="display:none"></span>
@@ -315,10 +325,11 @@
 <div class="page-body">
   <div class="section-tabs">
     <button class="tab-btn active" onclick="showSection('total')"  id="tab-total">Total SQFT</button>
-    <button class="tab-btn"        onclick="showSection('fon')"    id="tab-fon">FON (Anaheim)</button>
+    <button class="tab-btn"        onclick="showSection('fon')"    id="tab-fon">FONTANA</button>
     <button class="tab-btn"        onclick="showSection('sav')"    id="tab-sav">SAVANNAH</button>
     <button class="tab-btn"        onclick="showSection('aurora')" id="tab-aurora">AURORA</button>
     <button class="tab-btn"        onclick="showSection('variance')" id="tab-variance">📈 Forecast Variance</button>
+    <button class="tab-btn"        onclick="showSection('about')"    id="tab-about">ℹ️ How It Works</button>
   </div>
   <div class="table-outer" id="tableOuter">
     <div class="table-scroll"><div id="tableContainer"></div></div>
@@ -334,7 +345,7 @@
         <label>Warehouse</label>
         <select id="varianceSectionSelect" onchange="renderVariance()">
           <option value="total">Total SQFT</option>
-          <option value="fon">FON (Anaheim)</option>
+          <option value="fon">FONTANA</option>
           <option value="sav">Savannah</option>
           <option value="aurora">Aurora</option>
         </select>
@@ -354,6 +365,43 @@
     <div class="chart-wrap"><canvas id="barChart"></canvas></div>
     <div class="chart-legend" id="chartLegend"></div>
   </div>
+  <div id="aboutOuter" style="display:none">
+    <div class="about-panel">
+      <h2>What this tool does</h2>
+      <p>PCEC WH SQFT Forecast converts a D-Chart unit-forecast file (Net Sales + Inventory, by product, by month) into projected warehouse floor-space (SQFT) needs at each of the three regional warehouses — <strong>FONTANA</strong>, <strong>Savannah</strong>, and <strong>Aurora</strong> — plus a combined <strong>Total SQFT</strong> view.</p>
+
+      <h2>Calculation logic (per product, per month)</h2>
+      <ol>
+        <li><strong>Effective units</strong> — Inventory units are combined with a portion of forecasted Net Sales (the "MWO" buffer), using a fixed MWO rate (currently 15%):<br>
+          <code>effective units = Inventory + (Net Sales × MWO_RATE)</code>
+        </li>
+        <li><strong>Raw SQFT</strong> — Each product has a CFT-per-unit (cubic feet per unit) constant. Units are converted to cubic feet and then halved (an empirical packing/stacking factor) to get raw SQFT:<br>
+          <code>raw SQFT = (effective units × CFT per unit) / 2</code>
+        </li>
+        <li><strong>Warehouse allocation %</strong> — Each product code has a fixed split (editable under ⚙ Allocations) describing what % of its volume historically/operationally goes to Aurora, FONTANA, and Savannah. These three percentages always sum to 100% per product.</li>
+        <li><strong>Warehouse-specific multiplier</strong> — Each warehouse view then applies its own multiplier (editable under 🧮 Factors) on top of the allocated SQFT — e.g. a "COI factor" for FONTANA, and separate factors for Savannah and Aurora — to account for stacking/clearance differences at that facility:<br>
+          <code>warehouse SQFT = raw SQFT × allocation % × warehouse factor</code>
+        </li>
+        <li><strong>Totals &amp; capacity</strong> — Per-product SQFT is summed into a monthly total per warehouse. That total is then compared against the Max SQFT capacity set for that warehouse (under 📦 Capacity) to flag months that are near or over capacity (warning/critical thresholds).</li>
+        <li><strong>MWO overstack</strong> — For the main bulk product (code FA000), an additional 33% "overstack" line is shown separately to flag temporary surplus inventory exposure.</li>
+      </ol>
+
+      <h2>Other tabs</h2>
+      <ul>
+        <li><strong>Total SQFT</strong> — Combined, unallocated SQFT need before any warehouse split is applied.</li>
+        <li><strong>FONTANA / Savannah / Aurora</strong> — SQFT need at that specific warehouse, after allocation % and warehouse factor are applied.</li>
+        <li><strong>📈 Forecast Variance</strong> — Compares the same target month's forecast across multiple uploaded snapshots (archived D-Chart files) to show how the forecast for that month has drifted over time.</li>
+      </ul>
+
+      <h2>Editable inputs</h2>
+      <ul>
+        <li><strong>⚙ Allocations</strong> — % split of each product's volume across Aurora / FONTANA / Savannah (must total 100% per row).</li>
+        <li><strong>🧮 Factors</strong> — Multipliers applied per warehouse (FONTANA COI factor, Savannah factor, Aurora factor) when converting allocated SQFT into final warehouse SQFT.</li>
+        <li><strong>📦 Capacity</strong> — Max SQFT for each warehouse, used to color-code the table/chart (normal / warning / critical).</li>
+      </ul>
+      <p class="note">All calculations run client-side in your browser — no data is sent to a server. Changing any allocation, factor, or capacity input immediately recalculates every tab.</p>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -372,23 +420,23 @@ const CFT_PER_UNIT = {
 
 // Default warehouse allocations — these can be overridden by user
 const DEFAULT_WH = {
-  'CG000':{aurora:0,   anaheim:0.2,   savannah:0.8  },
-  'CE000':{aurora:0,   anaheim:1.0,   savannah:0    },
-  'AA200':{aurora:1.0, anaheim:0,     savannah:0    },
-  'DA000':{aurora:0,   anaheim:0.2,   savannah:0.8  },
-  'AC000':{aurora:1.0, anaheim:0,     savannah:0    },
-  'CA000':{aurora:0,   anaheim:0.6,   savannah:0.4  },
-  'JC000':{aurora:0,   anaheim:0.2,   savannah:0.8  },
-  'FA400':{aurora:0,   anaheim:0.03,  savannah:0    },
-  'DA300':{aurora:0,   anaheim:1.0,   savannah:0    },
-  'FA000':{aurora:0,   anaheim:0.331, savannah:0.669},
-  'FA500':{aurora:0,   anaheim:0.315, savannah:0.685},
-  'FA600':{aurora:0,   anaheim:0.83,  savannah:0.17 },
-  'FA300':{aurora:0,   anaheim:1.0,   savannah:0    },
-  'CT000':{aurora:0,   anaheim:1.0,   savannah:0    },
-  'HG000':{aurora:0,   anaheim:0.5,   savannah:0.5  },
-  'BC300':{aurora:1.0, anaheim:0,     savannah:0    },
-  'BC200':{aurora:0,   anaheim:0,     savannah:0    },
+  'CG000':{aurora:0,   fontana:0.2,   savannah:0.8  },
+  'CE000':{aurora:0,   fontana:1.0,   savannah:0    },
+  'AA200':{aurora:1.0, fontana:0,     savannah:0    },
+  'DA000':{aurora:0,   fontana:0.2,   savannah:0.8  },
+  'AC000':{aurora:1.0, fontana:0,     savannah:0    },
+  'CA000':{aurora:0,   fontana:0.6,   savannah:0.4  },
+  'JC000':{aurora:0,   fontana:0.2,   savannah:0.8  },
+  'FA400':{aurora:0,   fontana:0.03,  savannah:0    },
+  'DA300':{aurora:0,   fontana:1.0,   savannah:0    },
+  'FA000':{aurora:0,   fontana:0.331, savannah:0.669},
+  'FA500':{aurora:0,   fontana:0.315, savannah:0.685},
+  'FA600':{aurora:0,   fontana:0.83,  savannah:0.17 },
+  'FA300':{aurora:0,   fontana:1.0,   savannah:0    },
+  'CT000':{aurora:0,   fontana:1.0,   savannah:0    },
+  'HG000':{aurora:0,   fontana:0.5,   savannah:0.5  },
+  'BC300':{aurora:1.0, fontana:0,     savannah:0    },
+  'BC200':{aurora:0,   fontana:0,     savannah:0    },
 };
 
 const AUR_FACTOR = 2;
@@ -438,7 +486,7 @@ let CAPACITY        = loadCapacity();       // live, editable warehouse capacity
 
 // ─── WAREHOUSE CAPACITY STORAGE ──────────────────────────────────────────────
 function defaultCapacity(){
-  return {anaheim:0, savannah:0, aurora:0, warnPct:90, critPct:100};
+  return {fontana:0, savannah:0, aurora:0, warnPct:90, critPct:100};
 }
 function loadCapacity() {
   try {
@@ -447,7 +495,7 @@ function loadCapacity() {
       const parsed = JSON.parse(raw);
       const def = defaultCapacity();
       return {
-        anaheim:  parsed.anaheim ?? def.anaheim,
+        fontana:  parsed.fontana ?? parsed.anaheim ?? def.fontana,
         savannah: parsed.savannah ?? def.savannah,
         aurora:   parsed.aurora ?? def.aurora,
         warnPct:  parsed.warnPct ?? def.warnPct,
@@ -484,7 +532,22 @@ function saveFactorsToStorage(f) {
 function loadAllocations() {
   try {
     const raw = localStorage.getItem(ALLOC_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Migrate old 'anaheim' key to 'fontana' if present
+      let migrated = false;
+      for (const code of Object.keys(parsed)) {
+        if (parsed[code].hasOwnProperty('anaheim')) {
+          parsed[code].fontana = parsed[code].anaheim;
+          delete parsed[code].anaheim;
+          migrated = true;
+        }
+      }
+      if (migrated) {
+        try { localStorage.setItem(ALLOC_KEY, JSON.stringify(parsed)); } catch(e){}
+      }
+      return parsed;
+    }
   } catch(e){}
   return JSON.parse(JSON.stringify(DEFAULT_WH));  // deep copy
 }
@@ -658,7 +721,7 @@ function rebuildSections() {
 function applyWarehouse(sqft,code,section){
   if(section==='total') return sqft;
   const wh=WH_FACTORS[code]; if(!wh) return 0;
-  if(section==='fon')    return sqft*wh.anaheim *FACTORS.coi;
+  if(section==='fon')    return sqft*wh.fontana *FACTORS.coi;
   if(section==='sav')    return sqft*wh.savannah*FACTORS.sav;
   if(section==='aurora') return sqft*wh.aurora  *FACTORS.aur;
   return 0;
@@ -688,10 +751,20 @@ function showSection(section){
 
   const tableOuter=document.getElementById('tableOuter');
   const varianceOuter=document.getElementById('varianceOuter');
+  const aboutOuter=document.getElementById('aboutOuter');
 
+  if(section==='about'){
+    tableOuter.style.display='none';
+    varianceOuter.style.display='none';
+    aboutOuter.style.display='';
+    document.getElementById('capLegend').style.display='none';
+    hideChart();
+    return;
+  }
   if(section==='variance'){
     tableOuter.style.display='none';
     varianceOuter.style.display='';
+    aboutOuter.style.display='none';
     document.getElementById('capLegend').style.display='none';
     hideChart();
     renderVariance();
@@ -699,6 +772,7 @@ function showSection(section){
   }
   tableOuter.style.display='';
   varianceOuter.style.display='none';
+  aboutOuter.style.display='none';
   summaryData?renderTable(section):renderEmpty();
   summaryData?renderChart(section):hideChart();
 }
@@ -739,7 +813,7 @@ function renderTable(section){
   </tr></thead><tbody>`;
   for(const row of rows)
     html+=`<tr><td class="cat-col cat-name">${row.name}</td><td class="cat-col cat-code">${row.code}</td>${row.values.map(v=>`<td>${fmt(v)}</td>`).join('')}</tr>`;
-  const capMap={fon:CAPACITY.anaheim, sav:CAPACITY.savannah, aurora:CAPACITY.aurora};
+  const capMap={fon:CAPACITY.fontana, sav:CAPACITY.savannah, aurora:CAPACITY.aurora};
   const capLimit=capMap[section];
   const totalCells = totals.map(v=>{
     if(section==='total' || !capLimit || capLimit<=0) return `<td>${fmt(v)}</td>`;
@@ -774,7 +848,7 @@ function renderChart(section){
   const {rows}=sections[section];
   const activeRows=rows.filter(r=>r.values.some(v=>v>0));
   if(!activeRows.length){ hideChart(); return; }
-  const sectionLabel={total:'Total SQFT',fon:'FON — Anaheim',sav:'Savannah',aurora:'Aurora'}[section];
+  const sectionLabel={total:'Total SQFT',fon:'FON — FONTANA',sav:'Savannah',aurora:'Aurora'}[section];
   const datasets=activeRows.map((row,i)=>({
     label:row.name,
     data:row.values.map(v=>parseFloat(v.toFixed(2))),
@@ -834,7 +908,7 @@ function closeCapacityPanel(){
   document.body.style.overflow='';
 }
 function buildCapacityRows(){
-  document.getElementById('capAnaheim').value=CAPACITY.anaheim;
+  document.getElementById('capFontana').value=CAPACITY.fontana;
   document.getElementById('capSavannah').value=CAPACITY.savannah;
   document.getElementById('capAurora').value=CAPACITY.aurora;
   document.getElementById('capWarnPct').value=CAPACITY.warnPct;
@@ -851,7 +925,7 @@ function saveCapacity(){
   let critPct=num('capCritPct',def.critPct);
   if(warnPct>critPct) [warnPct,critPct]=[critPct,warnPct]; // keep sane ordering
   CAPACITY={
-    anaheim:  Math.max(0,num('capAnaheim',def.anaheim)),
+    fontana:  Math.max(0,num('capFontana',def.fontana)),
     savannah: Math.max(0,num('capSavannah',def.savannah)),
     aurora:   Math.max(0,num('capAurora',def.aurora)),
     warnPct:  Math.max(0,warnPct),
@@ -943,9 +1017,9 @@ function buildPanelRows(){
   const body=document.getElementById('panelBody');
   body.innerHTML='';
   for(const prod of PRODUCTS){
-    const wh=WH_FACTORS[prod.code]||{aurora:0,anaheim:0,savannah:0};
+    const wh=WH_FACTORS[prod.code]||{aurora:0,fontana:0,savannah:0};
     const aur=Math.round(wh.aurora*100);
-    const anh=Math.round(wh.anaheim*100);
+    const anh=Math.round(wh.fontana*100);
     const sav=Math.round(wh.savannah*100);
     const row=document.createElement('div');
     row.className='alloc-row';
@@ -956,7 +1030,7 @@ function buildPanelRows(){
         <div class="alloc-code">${prod.code}</div>
       </div>
       <input class="pct-input" type="number" min="0" max="100" step="1" value="${aur}"  data-wh="aurora"    oninput="onAllocInput(this)">
-      <input class="pct-input" type="number" min="0" max="100" step="1" value="${anh}"  data-wh="anaheim"   oninput="onAllocInput(this)">
+      <input class="pct-input" type="number" min="0" max="100" step="1" value="${anh}"  data-wh="fontana"   oninput="onAllocInput(this)">
       <input class="pct-input" type="number" min="0" max="100" step="1" value="${sav}"  data-wh="savannah"  oninput="onAllocInput(this)">
       <div class="row-sum" id="sum-${prod.code}">${aur+anh+sav}%</div>`;
     body.appendChild(row);
@@ -1006,7 +1080,7 @@ function saveAllocations(){
     const inputs=[...row.querySelectorAll('.pct-input')];
     WH_FACTORS[prod.code]={
       aurora:   (parseInt(inputs[0].value)||0)/100,
-      anaheim:  (parseInt(inputs[1].value)||0)/100,
+      fontana:  (parseInt(inputs[1].value)||0)/100,
       savannah: (parseInt(inputs[2].value)||0)/100,
     };
   }
@@ -1035,7 +1109,7 @@ function exportToCSV(){
   if(!summaryData) return;
   const {months,fileName,sections}=summaryData;
   let csv='';
-  for(const [sec,label] of Object.entries({total:'Total SQFT',fon:'FON Anaheim',sav:'Savannah',aurora:'Aurora'})){
+  for(const [sec,label] of Object.entries({total:'Total SQFT',fon:'FON FONTANA',sav:'Savannah',aurora:'Aurora'})){
     const {rows,totals}=sections[sec];
     csv+=`\n${label}\nProduct,Code,${months.join(',')}\n`;
     rows.forEach(r=>{ csv+=`"${r.name}",${r.code},${r.values.map(v=>v.toFixed(2)).join(',')}\n`; });
@@ -1112,7 +1186,7 @@ function renderVariance(){
     return {snap, total:sec.totals[idx], rowVals};
   });
 
-  const sectionLabel={total:'Total SQFT',fon:'FON — Anaheim',sav:'Savannah',aurora:'Aurora'}[section];
+  const sectionLabel={total:'Total SQFT',fon:'FON — FONTANA',sav:'Savannah',aurora:'Aurora'}[section];
 
   // ── Grouped bar chart: x-axis = products, one dataset per snapshot ──────────
   const activeCodes=PRODUCTS.filter(p=>colData.some(c=>(c.rowVals[p.code]||0)>0.0001));
